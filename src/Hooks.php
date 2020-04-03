@@ -98,6 +98,7 @@ class Hooks {
 	 * @return string
 	 */
 	private static function buildDeckHtml( $decktitle, &$cards ) {
+		$utmSource = self::makeUtmSource();
 		$decklist_html = [];
 		$prevsection = '';
 		$first_card_written = false;
@@ -122,7 +123,7 @@ class Hooks {
 			}
 			$decklist_html[] = '<p class="ext-scryfall-deckentry">' .
 				'<span class="ext-scryfall-deckcardcount">' . $card['quantity'] . '</span> ' .
-				self::outputLink( $card['name'], '', '', $card['name'] ) . '</p>';
+				self::outputLink( $card['name'], '', '', $card['name'], $utmSource ) . '</p>';
 			$first_card_written = true;
 		}
 		$decklist_html[] = '</div>';
@@ -175,7 +176,7 @@ class Hooks {
 
 		$anchor = $args['title'] ?? $input;
 
-		return self::outputLink( $input, $set, $cn, $anchor );
+		return self::outputLink( $input, $set, $cn, $anchor, self::makeUtmSource() );
 	}
 
 	/**
@@ -190,16 +191,18 @@ class Hooks {
 		$parser->getOutput()->addModules( 'ext.scryfallLinks.tooltip' );
 		$input = $parser->recursiveTagParse( $input, $frame );
 
+		$utmSource = self::makeUtmSource();
+
 		// Break input into array by lines
-		$lines = explode( "\n", $input );
+		$lines = explode( PHP_EOL, $input );
 
 		if ( count( $lines ) ) {
 			$return = "";
 			foreach ( $lines as $line ) {
 				if ( !empty( $line ) ) {
-					$return .= self::outputLink( $line, '', '', $line ) . "\n";
+					$return .= self::outputLink( $line, '', '', $line, $utmSource ) . PHP_EOL;
 				}
-				$return .= "\n";
+				$return .= PHP_EOL;
 			}
 			// don't add extra  line breaks around tag
 			$return = trim( $return );
@@ -218,18 +221,20 @@ class Hooks {
 	 * @param string $anchor Anchor text
 	 * @return string
 	 */
-	protected static function outputLink( $card, $set, $cn, $anchor ) {
-		$sitename = \MediaWiki\MediaWikiServices::getInstance()->getMainConfig()->get( 'Sitename' );
-		$sitename = preg_replace( "/[^A-Za-z0-9]/", '', $sitename );
+	protected static function outputLink( $card, $set, $cn, $anchor, $utmSource ) {
 		$setquery = $set ? ' set:' . $set : '';
 		$cnquery = $cn ? ' cn:' . $cn : '';
-		$search = '!"' . $card . '"' . $setquery . $cnquery;
-		$output = '<a href="https://scryfall.com/search?q=' . htmlspecialchars( urlencode( $search ) ) .
-			'&utm_source=mw_' . $sitename . '" class="ext-scryfall-cardname"';
+
+		$query = http_build_query([
+			'q' => '!"' . $card . '"' . $setquery . $cnquery,
+			'utm_source' => $utmSource
+		]);
+
+		$output = '<a href="https://scryfall.com/search?' . $query . '" class="ext-scryfall-cardname"';
 
 		$output .= ' data-card-name="' . htmlspecialchars( $card ) . '"';
 
-		// Only add this attributes if set
+		// Only add these attributes if set
 		if ( $set ) {
 			$output .= ' data-card-set="' . htmlspecialchars( $set ) . '"';
 		}
@@ -240,6 +245,12 @@ class Hooks {
 		$output .= '>' . htmlspecialchars( $anchor ) . '</a>';
 
 		return $output;
+	}
+
+	protected static function makeUtmSource() {
+		$sitename = \MediaWiki\MediaWikiServices::getInstance()->getMainConfig()->get( 'Sitename' );
+		$sitename = preg_replace( "/[^A-Za-z0-9]/", '', $sitename );
+		return 'mw_' . $sitename;
 	}
 
 }
