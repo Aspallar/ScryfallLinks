@@ -2,6 +2,8 @@
 
 namespace MediaWiki\Extension\ScryfallLinks;
 
+use Html;
+
 /**
  * Hooks for ScryfallLinks extension
  *
@@ -219,34 +221,39 @@ class Hooks {
 	 * @param string $set Set abbreviation
 	 * @param string $cn Collector number
 	 * @param string $anchor Anchor text
+	 * @param string $utmSource value to use for utm_source
 	 * @return string
 	 */
 	protected static function outputLink( $card, $set, $cn, $anchor, $utmSource ) {
 		$setquery = $set ? ' set:' . $set : '';
 		$cnquery = $cn ? ' cn:' . $cn : '';
 
-		$query = http_build_query([
+		$query = http_build_query( [
 			'q' => '!"' . $card . '"' . $setquery . $cnquery,
 			'utm_source' => $utmSource
-		]);
+		] );
 
-		$output = '<a href="https://scryfall.com/search?' . $query . '" class="ext-scryfall-cardname"';
-
-		$output .= ' data-card-name="' . htmlspecialchars( $card ) . '"';
-
-		// Only add these attributes if set
+		$linkAttributes = [
+			'href' => 'https://scryfall.com/search?' . $query,
+			'class' => 'ext-scryfall-cardname',
+			'data-card-name' => $card
+		];
 		if ( $set ) {
-			$output .= ' data-card-set="' . htmlspecialchars( $set ) . '"';
+			$linkAttributes['data-card-set'] = $set;
 		}
 		if ( $cn ) {
-			$output .= ' data-card-number="' . htmlspecialchars( $cn ) . '"';
+			$linkAttributes['data-card-number'] = $cn;
 		}
 
-		$output .= '>' . htmlspecialchars( $anchor ) . '</a>';
+		$link = Html::rawElement( 'a', $linkAttributes, $anchor );
 
-		return $output;
+		return $link;
 	}
 
+	/**
+	 * Make the string used for utm_source query parameter
+	 * @return string
+	 */
 	protected static function makeUtmSource() {
 		$sitename = \MediaWiki\MediaWikiServices::getInstance()->getMainConfig()->get( 'Sitename' );
 		$sitename = preg_replace( "/[^A-Za-z0-9]/", '', $sitename );
