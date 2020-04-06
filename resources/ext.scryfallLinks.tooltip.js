@@ -50,7 +50,7 @@
 					tip.reference.href = permapageUri.href + '&back';
 				}
 			} else if ( data.layout === 'split' ) {
-				if ( data.card_faces[ 1 ].oracle_text.startsWith( 'Aftermath' ) ) {
+				if ( data.card_faces[ 1 ].oracle_text.substring( 0, 9 ) === 'Aftermath' ) {
 					if ( isSecondface ) {
 						img.classList.add( 'ext-scryfall-rotate-90ccw' );
 						// We add rotationClass to the reference attributes to cache it

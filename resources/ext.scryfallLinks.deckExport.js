@@ -116,8 +116,10 @@
 		console.log( contenttype + '\n' + filename + '\n' + data ); // eslint-disable-line no-console
 	}
 
-	$( function () {
-		$( '.ext-scryfall-deckexport-text' ).on( 'click', ( event ) => {
+	function initDownloadUi( $content ) {
+		const $decks = $content.find( '.ext-scryfall-deckexport' );
+
+		$decks.find( 'button.ext-scryfall-deckexport-text' ).on( 'click', ( event ) => {
 			const deck = getDeck( event );
 			download(
 				deck.title + '.txt',
@@ -126,7 +128,7 @@
 			);
 		} );
 
-		$( '.ext-scryfall-deckexport-mtgo' ).on( 'click', ( event ) => {
+		$decks.find( '.ext-scryfall-deckexport-mtgo' ).on( 'click', ( event ) => {
 			const deck = getDeck( event );
 			download(
 				deck.title + '.txt',
@@ -135,7 +137,7 @@
 			);
 		} );
 
-		$( '.ext-scryfall-deckexport-apprentice' ).on( 'click', ( event ) => {
+		$decks.find( '.ext-scryfall-deckexport-apprentice' ).on( 'click', ( event ) => {
 			const deck = getDeck( event );
 			download(
 				deck.title + '.dec',
@@ -144,7 +146,7 @@
 			);
 		} );
 
-		$( '.ext-scryfall-deckexport-octgn' ).on( 'click', ( event ) => {
+		$decks.find( '.ext-scryfall-deckexport-octgn' ).on( 'click', ( event ) => {
 			const deck = getDeck( event );
 			download(
 				deck.title + '.o8d',
@@ -153,10 +155,13 @@
 			);
 		} );
 
-		$( '.ext-scryfall-deckexport-decklist' ).on( 'click', ( event ) => {
+		$decks.find( '.ext-scryfall-deckexport-decklist' ).on( 'click', ( event ) => {
 			const deck = getDeck( event ),
 				uri = new URL( deck.print( 'decklist.org' ) );
 			window.open( uri, '_blank' );
 		} );
-	} );
+	}
+
+	mw.hook( 'wikipage.content' ).add( initDownloadUi );
+
 }() );
