@@ -86,14 +86,19 @@
 		return rotationClass;
 	}
 
-	// fetch scryfall data and initialize the tooltip
-	async function fetchCardTooltipAsync( searchUri, tip, img ) {
-		var data, rotationClass, isSecondface = false, useBackImage = false;
+	async function fetchCardData( searchUri ) {
 		const response = await fetch( searchUri );
 		if ( !response.ok ) {
 			throw Error( response.status );
 		}
-		data = await response.json();
+		return await response.json();
+	}
+
+	// fetch scryfall data and initialize the tooltip
+	async function fetchCardTooltipAsync( searchUri, tip, img ) {
+		var rotationClass, isSecondface = false, useBackImage = false;
+
+		const data = await fetchCardData( searchUri );
 
 		if ( data.card_faces ) {
 			isSecondface = data.card_faces[ 0 ].name.replace( /[^a-z]/ig, '' ).toUpperCase() !==
@@ -122,11 +127,6 @@
 	// init card tooltip from scryfall
 	async function initCardTooltipAsync( tip ) {
 		try {
-			if ( tip.reference.dataset.unrecognized ) {
-				throw new Error( '404' );
-			}
-			tip.loading = true;
-			hideTooltip( tip );
 			const img = createTooltipImg( tip ),
 				searchUri = makeSearchUri( tip.reference.dataset );
 			await fetchCardTooltipAsync( searchUri, tip, img );
@@ -166,6 +166,8 @@
 					} else if ( tip.reference.dataset.unrecognized ) {
 						unrecognizedCard( tip );
 					} else {
+						tip.loading = true;
+						hideTooltip( tip );
 						initCardTooltipAsync( tip );
 					}
 				}
