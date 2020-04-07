@@ -1,90 +1,150 @@
-/* eslint one-var: "off", vars-on-top: "off" */
-{
-	// Shows a tip that we've previously loaded
-	function showCachedTip( tip ) {
+( function () {
+	// Hide a tooltip
+	function hideTooltip( tip ) {
+		tip.popper.style.display = 'none';
+		tip.reference.style.cursor = 'progress';
+	}
+
+	function showTooltip( tip ) {
+		tip.popper.style.removeProperty( 'display' );
+	}
+
+	// set tip contents to unreconized card message
+	function unrecognizedCard( tip ) {
+		tip.setContent( mw.message( 'scryfalllinks-unrecognized-card' ).escaped() );
+	}
+
+	// create an image for use as a card tooltip
+	function createTooltipImg( tip ) {
 		const img = document.createElement( 'img' );
-		img.classList.add( 'ext-scryfall-cardimage', tip.reference.dataset.rotationClass );
+		img.classList.add( 'ext-scryfall-cardimage' );
 		img.alt = tip.reference.text;
 		img.width = 244;
+		return img;
+	}
+
+	// Shows a tip that we've previously loaded
+	function showCachedTip( tip ) {
+		const img = createTooltipImg( tip );
+		img.classList.add( tip.reference.dataset.rotationClass );
 		img.src = tip.reference.dataset.imgUri;
 		tip.setContent( img );
 	}
 
-	// Fetches the correct card image as long as it's not a back face
-	async function fastBranch( searchUri, tip, img, fastController ) {
-		try {
-			const fastImgUri = new URL( searchUri.href );
-			fastImgUri.searchParams.set( 'format', 'image' );
-			fastImgUri.searchParams.set( 'version', 'normal' );
-			const response = await fetch( fastImgUri, { signal: fastController.signal } );
-			if ( !response.ok ) {
-				throw Error( response.status );
-			}
-			img.src = URL.createObjectURL( await response.blob() );
-			tip.setContent( img );
-			tip.reference.dataset.imgUri = img.src;
-			// Show the tooltip by removing display:none
-			tip.popper.style.removeProperty( 'display' );
-		} catch ( e ) {
+	// get the appropriate image uri from scryfall data
+	function getCardImageSource( data, useBackImage ) {
+		if ( useBackImage ) {
+			return data.card_faces[ 1 ].image_uris.normal;
+		} else if ( data.image_uris ) {
+			return data.image_uris.normal;
+		} else {
+			return data.card_faces[ 0 ].image_uris.normal;
 		}
 	}
 
-	// Rotates the image if necessary and fetches the correct card image if it's a back face
-	async function correctBranch( searchUri, tip, img, fastController ) {
+	// return a href that links directly to the scryfall card page
+	function makeDirectCardPageLink( originalHref, scryfallHref, useBackImage ) {
+		const utmSource = new URL( originalHref ).searchParams.get( 'utm_source' ),
+			cardPageUri = new URL( scryfallHref );
+		cardPageUri.searchParams.set( 'utm_source', utmSource );
+		// Must be &back only, not &back=, so have to add it this way
+		return useBackImage ? cardPageUri.href + '&back' : cardPageUri.href;
+	}
+
+	// make the uri to search for the card on scryfall
+	function makeSearchUri( params ) {
+		const searchUri = new URL( 'https://api.scryfall.com/cards/named' );
+		if ( typeof params.cardSet === 'undefined' || typeof params.cardNumber === 'undefined' || params.cardNumber === '' ) {
+			searchUri.searchParams.set( 'exact', params.cardName );
+			if ( typeof params.cardSet !== 'undefined' ) {
+				searchUri.searchParams.set( 'set', params.cardSet );
+			}
+		} else {
+			searchUri.pathname = 'cards/' + params.cardSet.toLowerCase() + '/' + params.cardNumber.toLowerCase();
+		}
+		return searchUri;
+	}
+
+	// return the appropriate rotation class for a card, null if card is not rotated
+	function getRotationClass( data, isSecondface ) {
+		var rotationClass = null;
+		if ( data.layout === 'planar' || data.name === 'Burning Cinder Fury of Crimson Chaos Fire' ) {
+			rotationClass = 'ext-scryfall-rotate-90cw';
+		} else if ( data.card_faces ) {
+			if ( data.layout === 'split' ) {
+				if ( data.card_faces[ 1 ].oracle_text.substring( 0, 9 ) === 'Aftermath' ) {
+					if ( isSecondface ) {
+						rotationClass = 'ext-scryfall-rotate-90ccw';
+					}
+				} else {
+					rotationClass = 'ext-scryfall-rotate-90cw';
+				}
+			} else if ( data.layout === 'flip' && isSecondface ) {
+				rotationClass = 'ext-scryfall-rotate-180';
+			}
+		}
+		return rotationClass;
+	}
+
+	// fetch scryfall data and initialize the tooltip
+	async function fetchCardTooltipAsync( searchUri, tip, img ) {
+		var data, rotationClass, isSecondface = false, useBackImage = false;
 		const response = await fetch( searchUri );
 		if ( !response.ok ) {
 			throw Error( response.status );
 		}
-		const data = await response.json();
-		const referenceUri = new URL( tip.reference.href );
-		const utmSource = referenceUri.searchParams.get( 'utm_source' );
-		const permapageUri = new URL( data.scryfall_uri );
-		permapageUri.searchParams.set( 'utm_source', utmSource );
-		var fastBranchIsInvalid = false;
-		if ( Object.prototype.hasOwnProperty.call( data, 'card_faces' ) ) {
-			const isSecondface = data.card_faces[ 0 ].name.replace( /[^a-z]/ig, '' ).toUpperCase() !==
+		data = await response.json();
+
+		if ( data.card_faces ) {
+			isSecondface = data.card_faces[ 0 ].name.replace( /[^a-z]/ig, '' ).toUpperCase() !==
 				decodeURIComponent( tip.reference.dataset.cardName ).replace( /[^a-z]/ig, '' ).toUpperCase();
-			if ( data.layout === 'transform' || data.layout === 'double_faced_token' ) {
-				if ( isSecondface ) {
-					fastBranchIsInvalid = true;
-					tip.reference.href = permapageUri.href + '&back';
-				}
-			} else if ( data.layout === 'split' ) {
-				if ( data.card_faces[ 1 ].oracle_text.substring( 0, 9 ) === 'Aftermath' ) {
-					if ( isSecondface ) {
-						img.classList.add( 'ext-scryfall-rotate-90ccw' );
-						// We add rotationClass to the reference attributes to cache it
-						tip.reference.dataset.rotationClass = 'ext-scryfall-rotate-90ccw';
-					}
-				} else {
-					img.classList.add( 'ext-scryfall-rotate-90cw' );
-					tip.reference.dataset.rotationClass = 'ext-scryfall-rotate-90cw';
-				}
-			} else if ( data.layout === 'flip' ) {
-				if ( isSecondface ) {
-					img.classList.add( 'ext-scryfall-rotate-180' );
-					tip.reference.dataset.rotationClass = 'ext-scryfall-rotate-180';
-				}
-			}
+			useBackImage = isSecondface && ( data.layout === 'transform' || data.layout === 'double_faced_token' );
 		}
-		if ( data.layout === 'planar' || data.name === 'Burning Cinder Fury of Crimson Chaos Fire' ) {
-			img.classList.add( 'ext-scryfall-rotate-90cw' );
-			tip.reference.dataset.rotationClass = 'ext-scryfall-rotate-90cw';
+
+		rotationClass = getRotationClass( data, isSecondface );
+		if ( rotationClass !== null ) {
+			img.classList.add( rotationClass );
+			tip.reference.dataset.rotationClass = rotationClass;
 		}
-		// Change the card link from a redirect link to a direct (permapage) link
-		tip.reference.href = permapageUri.href;
-		// If fastBranch() is wrongly fetching the front face, abort it and fetch the back one
-		if ( fastBranchIsInvalid ) {
-			fastController.abort();
-			const response = await fetch( data.card_faces[ 1 ].image_uris.normal, {} );
-			if ( !response.ok ) {
-				throw Error( response.status );
+
+		// Change the card <a> to link directly to the scryfall card page
+		tip.reference.href = makeDirectCardPageLink( tip.reference.href,
+			data.scryfall_uri,
+			useBackImage );
+
+		img.src = getCardImageSource( data, useBackImage );
+		tip.setContent( img );
+		tip.reference.dataset.imgUri = img.src;
+
+		showTooltip( tip );
+	}
+
+	// init card tooltip from scryfall
+	async function initCardTooltipAsync( tip ) {
+		try {
+			if ( tip.reference.dataset.unrecognized ) {
+				throw new Error( '404' );
 			}
-			img.src = URL.createObjectURL( await response.blob() );
-			tip.setContent( img );
-			tip.reference.dataset.imgUri = img.src;
-			// Show the tooltip by removing display:none
-			tip.popper.style.removeProperty( 'display' );
+			tip.loading = true;
+			hideTooltip( tip );
+			const img = createTooltipImg( tip ),
+				searchUri = makeSearchUri( tip.reference.dataset );
+			await fetchCardTooltipAsync( searchUri, tip, img );
+			tip.reference.dataset.cached = true;
+		} catch ( e ) {
+			if ( e.message === '404' ) {
+				unrecognizedCard( tip );
+				// If we get a 404, we'll also short-circuit all future attempts
+				tip.reference.dataset.unrecognized = true;
+			} else {
+				tip.setContent( 'Preview error' );
+			}
+			tip.setProps( { theme: 'scryfall-error' } );
+			showTooltip( tip );
+		} finally {
+			// End cursor:progress
+			tip.reference.style.removeProperty( 'cursor' );
+			tip.loading = false;
 		}
 	}
 
@@ -100,60 +160,15 @@
 			ignoreAttributes: true,
 			theme: 'scryfall',
 			onShow( tip ) {
-				if ( tip.loading || tip.props.content !== '' ) {
-					return;
-				}
-				( async () => {
-					try {
-						if ( tip.reference.dataset.unrecognized ) {
-							throw new Error( '404' );
-						}
-						if ( tip.reference.dataset.cached ) {
-							showCachedTip( tip );
-							return;
-						}
-						tip.loading = true;
-						// Hide the tooltip until we've finished loaded the image
-						tip.popper.style.display = 'none';
-						tip.reference.style.cursor = 'progress';
-						const img = document.createElement( 'img' );
-						img.classList.add( 'ext-scryfall-cardimage' );
-						img.alt = tip.reference.text;
-						img.width = 244;
-						const params = tip.reference.dataset;
-						const searchUri = new URL( 'https://api.scryfall.com/cards/named' );
-						if ( typeof params.cardSet === 'undefined' || typeof params.cardNumber === 'undefined' || params.cardNumber === '' ) {
-							searchUri.searchParams.set( 'exact', params.cardName );
-							if ( typeof params.cardSet !== 'undefined' ) {
-								searchUri.searchParams.set( 'set', params.cardSet );
-							}
-						} else {
-							searchUri.pathname = 'cards/' + params.cardSet.toLowerCase() + '/' + params.cardNumber.toLowerCase();
-						}
-						// Fast speculative loading at the same time as slow correct loading
-						const fastController = new AbortController();
-						const fastPromise = fastBranch( searchUri, tip, img, fastController );
-						const correctPromise = correctBranch( searchUri, tip, img, fastController );
-						await fastPromise;
-						await correctPromise;
-						tip.reference.dataset.cached = true;
-					} catch ( e ) {
-						if ( e.message === '404' ) {
-							tip.setContent( mw.message( 'scryfalllinks-unrecognized-card' ).escaped() );
-							// If we get a 404, we'll also short-circuit all future attempts
-							tip.reference.dataset.unrecognized = true;
-						} else {
-							tip.setContent( 'Preview error' );
-						}
-						tip.setProps( { theme: 'scryfall-error' } );
-						// Show the tooltip by removing display:none
-						tip.popper.style.removeProperty( 'display' );
-					} finally {
-						// End cursor:progress
-						tip.reference.style.removeProperty( 'cursor' );
-						tip.loading = false;
+				if ( !tip.loading && tip.props.content === '' ) {
+					if ( tip.reference.dataset.cached ) {
+						showCachedTip( tip );
+					} else if ( tip.reference.dataset.unrecognized ) {
+						unrecognizedCard( tip );
+					} else {
+						initCardTooltipAsync( tip );
 					}
-				} )();
+				}
 			},
 			onHidden( tip ) {
 				tip.setContent( '' );
@@ -166,4 +181,5 @@
 			return new mw.Api().loadMessagesIfMissing( [ 'scryfalllinks-unrecognized-card' ] );
 		} ).then( initTippy );
 	} );
-}
+
+}() );
