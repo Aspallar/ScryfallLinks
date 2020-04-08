@@ -105,6 +105,8 @@
 				}
 				( async () => {
 					try {
+						let end, start = performance.now();
+
 						if ( tip.reference.dataset.unrecognized ) {
 							throw new Error( '404' );
 						}
@@ -135,7 +137,15 @@
 						const fastPromise = fastBranch( searchUri, tip, img, fastController );
 						const correctPromise = correctBranch( searchUri, tip, img, fastController );
 						await fastPromise;
+
+						end = performance.now();
+						console.log(tip.reference.dataset.cardName + '(img) = ' + ( end - start ) + 'ms' );
+
 						await correctPromise;
+
+						end = performance.now();
+						console.log(tip.reference.dataset.cardName + '(all) = ' + ( end - start ) + 'ms' );
+
 						tip.reference.dataset.cached = true;
 					} catch ( e ) {
 						if ( e.message === '404' ) {
