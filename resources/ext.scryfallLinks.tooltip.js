@@ -86,12 +86,22 @@
 		return rotationClass;
 	}
 
+	// fet card data from scryfall
 	async function fetchCardData( searchUri ) {
 		const response = await fetch( searchUri );
 		if ( !response.ok ) {
 			throw Error( response.status );
 		}
 		return await response.json();
+	}
+
+	// fetch card image and return a 'blob' url to it
+	async function fetchImage( url ) {
+		const response = await fetch( url, {} );
+		if ( !response.ok ) {
+			throw Error( response.status );
+		}
+		return URL.createObjectURL( await response.blob() );
 	}
 
 	// fetch scryfall data and initialize the tooltip
@@ -117,7 +127,9 @@
 			data.scryfall_uri,
 			useBackImage );
 
-		img.src = getCardImageSource( data, useBackImage );
+		// fetch the image this way rather than setting the source to the url so
+		// that we know when the image download has completed.
+		img.src = await fetchImage( getCardImageSource( data, useBackImage ) );
 		tip.setContent( img );
 		tip.reference.dataset.imgUri = img.src;
 
